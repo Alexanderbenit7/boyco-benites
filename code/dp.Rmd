@@ -1,0 +1,123 @@
+```{r}
+library(rio)
+library(dplyr)
+library(stringr)
+library(tidyr)
+```
+
+# 1. Elecciones Generales 2021
+## 1.1. Presidenciales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-presidenciales-2021-primera-vuelta-oficina-nacional-de>
+
+```{r}
+EG2021 <- import("/Users/alexander/Documents/boyco-benites/data/raw/Resultados_1ra_vuelta_Version_PCM.csv")
+
+# Step 2: Set correct column names (omit the last empty column)
+correct_names <- c(
+  "UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TIPO_ELECCION",
+  "MESA_DE_VOTACION", "DESCRIP_ESTADO_ACTA", "TIPO_OBSERVACION", "N_CVAS",
+  "N_ELEC_HABIL", "VOTOS_P1", "VOTOS_P2", "VOTOS_P3", "VOTOS_P4", "VOTOS_P5",
+  "VOTOS_P6", "VOTOS_P7", "VOTOS_P8", "VOTOS_P9", "VOTOS_P10", "VOTOS_P11",
+  "VOTOS_P12", "VOTOS_P13", "VOTOS_P14", "VOTOS_P15", "VOTOS_P16", "VOTOS_P17",
+  "VOTOS_P18", "VOTOS_VB", "VOTOS_VN", "VOTOS_VI"
+)
+
+# Step 3: Drop the last column (which is empty)
+EG2021 <- EG2021[, 1:31]
+
+# Step 4: Apply the correct names
+names(EG2021) <- correct_names
+```
+
+```{r}
+# Selected cols: Null and blank votes
+dataEG21 <- EG2021 %>% select(1:4,9,10,29,30) %>% # Only relevant features
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+   summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop") %>%
+      # Adding zeros:
+      mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Changing col names
+colnames(dataEG21) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+```
+
+```{r}
+# Calculating frequencies based on total registered votes
+dataEG21$AUSENTISMO <- 1-round(dataEG21$TOTAL_VOTOS/dataEG21$ELECTORES_HAB,2) # Turnout
+dataEG21$FreqBLANCOS <- round(dataEG21$V_BLANCOS/dataEG21$TOTAL_VOTOS,2) # Blank votes
+dataEG21$FreqNULOS <- round(dataEG21$V_NULOS/dataEG21$TOTAL_VOTOS,2) # Null votes
+dataEG21$FreqINVALIDOS = dataEG21$FreqBLANCOS + dataEG21$FreqNULOS # Invalid votes
+
+# Last steps:
+dataEG21$YEAR = 2021
+dataEG21$TYPE = "PRESIDENCIAL"
+```
+
+
+1.2. Congresales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-congresales-2021-oficina-nacional-de-procesos>
+
+```{r}
+EG2021C <- import("/Users/alexander/Documents/boyco-benites/data/raw/EG2021_Congresal.csv")
+```
+
+```{r}
+# Separate total number of electors and total number of votes because of complicated data structure
+d <- EG2021C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","MESA_DE_VOTACION","N_CVAS",
+         "N_ELEC_HABIL") %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() 
+  
+d <- d %>% select(-MESA_DE_VOTACION) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+
+# d has both variables for aggregated by district
+```
+
+```{r}
+dataEG21C <- EG2021C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","DESCRIPCION_OP","N_TOTAL_VOTOS",
+         "MESA_DE_VOTACION") %>% 
+  # Only relevant categories
+  filter(DESCRIPCION_OP %in% c("VOTOS EN BLANCO", "VOTOS NULOS")) %>% 
+  # Adding zeros
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  # Sum values
+  group_by(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO, DESCRIPCION_OP) %>%
+  # Data wrangling
+  summarise(VOTOS= sum(N_TOTAL_VOTOS, na.rm = TRUE)) %>% 
+  pivot_wider(
+    names_from = DESCRIPCION_OP,
+    values_from = VOTOS)
+```
+
+```{r}
+# Combine the two tables:
+d <- d[,c(1,5,6)] # Avoiding duplication
+dataEG21C <- merge(dataEG21C, d, by = "UBIGEO", all.x = TRUE) # Merge
+
+# Changing col names
+colnames(dataEG21C) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO",
+                         "V_BLANCOS","V_NULOS","TOTAL_VOTOS","ELECTORES_HAB")
+```
+
+```{r}
+# Calculations
+dataEG21C$AUSENTISMO <- 1 - round(dataEG21C$TOTAL_VOTOS / dataEG21C$ELECTORES_HAB,2) #Turnout
+dataEG21C$FreqBLANCOS <- round(dataEG21C$V_BLANCOS / dataEG21C$TOTAL_VOTOS, 2) #Blank
+dataEG21C$FreqNULOS <- round(dataEG21C$V_NULOS / dataEG21C$TOTAL_VOTOS, 2) #Null
+dataEG21C$FreqINVALIDOS <- dataEG21C$FreqBLANCOS + dataEG21C$FreqNULOS #Invalid
+
+# Last steps:
+dataEG21C$YEAR = 2021
+dataEG21C$TYPE = "CONGRESAL"
+```
+
+
+
+
