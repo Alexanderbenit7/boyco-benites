@@ -309,3 +309,143 @@ dataEG11C$FreqINVALIDOS <- dataEG11C$FreqBLANCOS + dataEG11C$FreqNULOS #Invalid
 dataEG11C$YEAR = 2011
 dataEG11C$TYPE = "CONGRESAL"
 ```
+
+
+# 4. Elecciones Generales 2006
+## 4.1. Presidenciales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-generales-2006-primera-vuelta-oficina-nacional-de-procesos>
+
+```{r}
+EG2006 <- import("/Users/alexander/Documents/boyco-benites/data/raw/EG2006_Presidencial.csv")
+```
+
+```{r}
+dataEG06 <- EG2006 %>% select(1:4,9,10,31,32) %>% # Only relevant features
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+   summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop") %>%
+      # Adding zeros:
+      mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Changing col names
+colnames(dataEG06) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+```
+
+```{r}
+# Calculating frequencies based on total registered votes
+dataEG06$AUSENTISMO <- 1-round(dataEG06$TOTAL_VOTOS / dataEG06$ELECTORES_HAB,2) # Turnout
+dataEG06$FreqBLANCOS <- round(dataEG06$V_BLANCOS/dataEG06$TOTAL_VOTOS,2) # Blank votes
+dataEG06$FreqNULOS <- round(dataEG06$V_NULOS/dataEG06$TOTAL_VOTOS,2) # Null votes
+dataEG06$FreqINVALIDOS = dataEG06$FreqBLANCOS + dataEG06$FreqNULOS # Invalid votes
+
+# Last steps:
+dataEG06$YEAR = 2006
+dataEG06$TYPE = "PRESIDENCIAL"
+```
+
+
+## 4.2. Congresales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-congresales-2006-oficina-nacional-de-procesos-0>
+
+```{r}
+EG2006C <- import("/Users/alexander/Documents/boyco-benites/data/raw/EG2006_Congresal.csv")
+```
+
+```{r}
+# Separate total number of electors and total number of votes because of complicated data structure
+d <- EG2006C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","MESA_DE_VOTACION","N_CVAS",
+         "N_ELEC_HABIL") %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA_DE_VOTACION) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+
+# d has both variables for aggregated by district
+```
+
+```{r}
+dataEG06C <- EG2006C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","DESCRIPCION_OP","N_TOTAL_VOTOS",
+         "MESA_DE_VOTACION") %>% 
+  # Only relevant categories
+  filter(DESCRIPCION_OP %in% c("VOTOS BLANCOS", "VOTOS NULOS")) %>% 
+  # Adding zeros
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  # Sum values
+  group_by(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO, DESCRIPCION_OP) %>%
+  # Data wrangling
+  summarise(VOTOS= sum(N_TOTAL_VOTOS, na.rm = TRUE)) %>% 
+  pivot_wider(
+    names_from = DESCRIPCION_OP,
+    values_from = VOTOS)
+```
+
+```{r}
+# Combine the two tables:
+d <- d[,c(1,5,6)] # Avoiding duplication
+dataEG06C <- merge(dataEG06C, d, by = "UBIGEO", all.x = TRUE) # Merge
+
+# Changing col names
+colnames(dataEG06C) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO",
+                         "V_BLANCOS","V_NULOS","TOTAL_VOTOS","ELECTORES_HAB")
+```
+
+```{r}
+# Calculations
+dataEG06C$AUSENTISMO <- 1 - round(dataEG06C$TOTAL_VOTOS / dataEG06C$ELECTORES_HAB,2) #Turnout
+dataEG06C$FreqBLANCOS <- round(dataEG06C$V_BLANCOS / dataEG06C$TOTAL_VOTOS, 2) #Blank
+dataEG06C$FreqNULOS <- round(dataEG06C$V_NULOS / dataEG06C$TOTAL_VOTOS, 2) #Null
+dataEG06C$FreqINVALIDOS <- dataEG06C$FreqBLANCOS + dataEG06C$FreqNULOS #Invalid
+
+# Last steps:
+dataEG06C$YEAR = 2006
+dataEG06C$TYPE = "CONGRESAL"
+```
+
+
+# 5. Elecciones Generales 2001
+## 5.1. Presidenciales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-distrito-de-las-generales-2001-primera-vuelta-oficina-nacional-de-procesos>
+
+```{r}
+EG2001 <- import("/Users/alexander/Documents/boyco-benites/data/raw/Resultados por distrito de las Elecciones Generales - Primera Vuelta.csv")
+```
+
+```{r}
+dataEG01 <- EG2001 %>% select(1:4,9:12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+dataEG01 <- dataEG01[,c(1,2,3,4,7,8,5,6)]
+
+# Changing col names
+colnames(dataEG01) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+
+dataEG01 <- dataEG01 %>% mutate(across(5:8, ~ as.numeric(gsub(",", "", .))))# Deal with comas
+```
+
+```{r}
+# Calculating frequencies based on total registered votes
+dataEG01$AUSENTISMO <- 1-round(dataEG01$TOTAL_VOTOS / dataEG01$ELECTORES_HAB,2) # Turnout
+dataEG01$FreqBLANCOS <- round(dataEG01$V_BLANCOS/dataEG01$TOTAL_VOTOS,2) # Blank votes
+dataEG01$FreqNULOS <- round(dataEG01$V_NULOS/dataEG01$TOTAL_VOTOS,2) # Null votes
+dataEG01$FreqINVALIDOS = dataEG01$FreqBLANCOS + dataEG01$FreqNULOS # Invalid votes
+
+# Last steps:
+dataEG01$YEAR = 2001
+dataEG01$TYPE = "PRESIDENCIAL"
+```
+
+
+
+
+
+
+
