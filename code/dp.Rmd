@@ -70,7 +70,7 @@ d <- EG2021C %>%
   select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","MESA_DE_VOTACION","N_CVAS",
          "N_ELEC_HABIL") %>% # Adding zeros:
   mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
-  distinct() 
+  distinct() # Unique cases
   
 d <- d %>% select(-MESA_DE_VOTACION) %>% 
   group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
@@ -119,5 +119,193 @@ dataEG21C$TYPE = "CONGRESAL"
 ```
 
 
+# 2. Elecciones Generales 2016
+## 2.1. Presidenciales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-presidenciales-2016-primera-vuelta-oficina-nacional-de>
+
+```{r}
+EG2016 <- import("/Users/alexander/Documents/boyco-benites/data/raw/2016_EG2016_Presidencial.csv")
+```
+
+```{r}
+dataEG16 <- EG2016 %>% select(1:4,9,10,25,26) %>% # Only relevant features
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+   summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop") %>%
+      # Adding zeros:
+      mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Changing col names
+colnames(dataEG16) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+```
+
+```{r}
+# Calculating frequencies based on total registered votes
+dataEG16$AUSENTISMO <- 1-round(dataEG16$TOTAL_VOTOS / dataEG16$ELECTORES_HAB,2) # Turnout
+dataEG16$FreqBLANCOS <- round(dataEG16$V_BLANCOS/dataEG16$TOTAL_VOTOS,2) # Blank votes
+dataEG16$FreqNULOS <- round(dataEG16$V_NULOS/dataEG16$TOTAL_VOTOS,2) # Null votes
+dataEG16$FreqINVALIDOS = dataEG16$FreqBLANCOS + dataEG16$FreqNULOS # Invalid votes
+
+# Last steps:
+dataEG16$YEAR = 2016
+dataEG16$TYPE = "PRESIDENCIAL"
+```
+
+## 2.2. Congresales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-congresales-2016-oficina-nacional-de-procesos-0>
+
+```{r}
+EG2016C <- import("/Users/alexander/Documents/boyco-benites/data/raw/2016_EG2016_Congresal.csv")
+```
+
+```{r}
+# Separate total number of electors and total number of votes because of complicated data structure
+d <- EG2016C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","MESA_DE_VOTACION","N_CVAS",
+         "N_ELEC_HABIL") %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA_DE_VOTACION) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+
+# d has both variables for aggregated by district
+```
+
+```{r}
+dataEG16C <- EG2016C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","DESCRIPCION_OP","N_TOTAL_VOTOS",
+         "MESA_DE_VOTACION") %>% 
+  # Only relevant categories
+  filter(DESCRIPCION_OP %in% c("VOTOS EN BLANCO", "VOTOS NULOS")) %>% 
+  # Adding zeros
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  # Sum values
+  group_by(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO, DESCRIPCION_OP) %>%
+  # Data wrangling
+  summarise(VOTOS= sum(N_TOTAL_VOTOS, na.rm = TRUE)) %>% 
+  pivot_wider(
+    names_from = DESCRIPCION_OP,
+    values_from = VOTOS)
+```
+
+```{r}
+# Combine the two tables:
+d <- d[,c(1,5,6)] # Avoiding duplication
+dataEG16C <- merge(dataEG16C, d, by = "UBIGEO", all.x = TRUE) # Merge
+
+# Changing col names
+colnames(dataEG16C) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO",
+                         "V_BLANCOS","V_NULOS","TOTAL_VOTOS","ELECTORES_HAB")
+```
+
+```{r}
+# Calculations
+dataEG16C$AUSENTISMO <- 1 - round(dataEG16C$TOTAL_VOTOS / dataEG16C$ELECTORES_HAB,2) #Turnout
+dataEG16C$FreqBLANCOS <- round(dataEG16C$V_BLANCOS / dataEG16C$TOTAL_VOTOS, 2) #Blank
+dataEG16C$FreqNULOS <- round(dataEG16C$V_NULOS / dataEG16C$TOTAL_VOTOS, 2) #Null
+dataEG16C$FreqINVALIDOS <- dataEG16C$FreqBLANCOS + dataEG16C$FreqNULOS #Invalid
+
+# Last steps:
+dataEG16C$YEAR = 2016
+dataEG16C$TYPE = "CONGRESAL"
+```
 
 
+# 3. Elecciones Generales 2011
+## 3.1. Presidenciales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-presidenciales-2011-primera-vuelta-oficina-nacional-0>
+
+```{r}
+EG2011 <- import("/Users/alexander/Documents/boyco-benites/data/raw/2011_EG2011_Presidencial.xlsx")
+```
+
+```{r}
+dataEG11 <- EG2011 %>% select(1:4,9,10,22,23) %>% # Only relevant features
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+   summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop") %>%
+      # Adding zeros:
+      mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Changing col names
+colnames(dataEG11) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+```
+
+```{r}
+# Calculating frequencies based on total registered votes
+dataEG11$AUSENTISMO <- 1-round(dataEG11$TOTAL_VOTOS / dataEG11$ELECTORES_HAB,2) # Turnout
+dataEG11$FreqBLANCOS <- round(dataEG11$V_BLANCOS/dataEG11$TOTAL_VOTOS,2) # Blank votes
+dataEG11$FreqNULOS <- round(dataEG11$V_NULOS/dataEG11$TOTAL_VOTOS,2) # Null votes
+dataEG11$FreqINVALIDOS = dataEG11$FreqBLANCOS + dataEG11$FreqNULOS # Invalid votes
+
+# Last steps:
+dataEG11$YEAR = 2011
+dataEG11$TYPE = "PRESIDENCIAL"
+```
+
+## 3.2. Congresales
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-congresales-2011-oficina-nacional-de-procesos>
+
+```{r}
+EG2011C <- import("/Users/alexander/Documents/boyco-benites/data/raw/2011_EG2011_Congresal.csv")
+```
+
+```{r}
+# Separate total number of electors and total number of votes because of complicated data structure
+d <- EG2011C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","MESA_DE_VOTACION","N_CVAS",
+         "N_ELEC_HABIL") %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA_DE_VOTACION) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+
+# d has both variables for aggregated by district
+```
+
+```{r}
+dataEG11C <- EG2011C %>% 
+  select("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO","DESCRIPCION_OP","N_TOTAL_VOTOS",
+         "MESA_DE_VOTACION") %>% 
+  # Only relevant categories
+  filter(DESCRIPCION_OP %in% c("VOTOS BLANCOS", "VOTOS NULOS")) %>% 
+  # Adding zeros
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  # Sum values
+  group_by(UBIGEO, DEPARTAMENTO, PROVINCIA, DISTRITO, DESCRIPCION_OP) %>%
+  # Data wrangling
+  summarise(VOTOS= sum(N_TOTAL_VOTOS, na.rm = TRUE)) %>% 
+  pivot_wider(
+    names_from = DESCRIPCION_OP,
+    values_from = VOTOS)
+```
+
+```{r}
+# Combine the two tables:
+d <- d[,c(1,5,6)] # Avoiding duplication
+dataEG11C <- merge(dataEG11C, d, by = "UBIGEO", all.x = TRUE) # Merge
+
+# Changing col names
+colnames(dataEG11C) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO",
+                         "V_BLANCOS","V_NULOS","TOTAL_VOTOS","ELECTORES_HAB")
+```
+
+```{r}
+# Calculations
+dataEG11C$AUSENTISMO <- 1 - round(dataEG11C$TOTAL_VOTOS / dataEG11C$ELECTORES_HAB,2) #Turnout
+dataEG11C$FreqBLANCOS <- round(dataEG11C$V_BLANCOS / dataEG11C$TOTAL_VOTOS, 2) #Blank
+dataEG11C$FreqNULOS <- round(dataEG11C$V_NULOS / dataEG11C$TOTAL_VOTOS, 2) #Null
+dataEG11C$FreqINVALIDOS <- dataEG11C$FreqBLANCOS + dataEG11C$FreqNULOS #Invalid
+
+# Last steps:
+dataEG11C$YEAR = 2011
+dataEG11C$TYPE = "CONGRESAL"
+```
