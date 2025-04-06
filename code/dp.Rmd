@@ -443,9 +443,38 @@ dataEG01$YEAR = 2001
 dataEG01$TYPE = "PRESIDENCIAL"
 ```
 
+## 5.2. Congresales
 
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-distrito-de-las-elecciones-congresales-2001-oficina-nacional-de-procesos>
 
+```{r}
+EG2001C <- import("/Users/alexander/Documents/boyco-benites/data/raw/Resultados por distrito de las Elecciones Congresales.csv")
+```
 
+```{r}
+dataEG01C <- EG2001C %>% select(1:4,9:12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
 
+dataEG01C <- dataEG01C[,c(1,2,3,4,7,8,5,6)]
+
+# Changing col names
+colnames(dataEG01C) <- c("UBIGEO", "DEPARTAMENTO", "PROVINCIA", "DISTRITO", "TOTAL_VOTOS",
+                        "ELECTORES_HAB","V_BLANCOS","V_NULOS")
+
+dataEG01C <- dataEG01C %>% mutate(across(5:8, ~ as.numeric(gsub(",", "", .))))# Deal with comas
+```
+
+```{r}
+# Calculations
+dataEG01C$AUSENTISMO <- 1 - round(dataEG01C$TOTAL_VOTOS / dataEG01C$ELECTORES_HAB,2) #Turnout
+dataEG01C$FreqBLANCOS <- round(dataEG01C$V_BLANCOS / dataEG01C$TOTAL_VOTOS, 2) #Blank
+dataEG01C$FreqNULOS <- round(dataEG01C$V_NULOS / dataEG01C$TOTAL_VOTOS, 2) #Null
+dataEG01C$FreqINVALIDOS <- dataEG01C$FreqBLANCOS + dataEG01C$FreqNULOS #Invalid
+
+# Last steps:
+dataEG01C$YEAR = 2001
+dataEG01C$TYPE = "CONGRESAL"
+```
 
 
