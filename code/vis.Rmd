@@ -1,0 +1,99 @@
+```{r}
+library(rio)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+```
+
+```{r}
+# Load data
+## Presidential Elections
+years <- c(2021, 2016, 2011, 2006, 2001)
+file_names <- paste0("/Users/alexander/Documents/boyco-benites/data/processed/presidenciales-"
+                     ,years, ".csv")  
+
+dataPresidential <- bind_rows(
+  lapply(seq_along(file_names), function(i) {
+    rio::import(file_names[i])
+  })
+)
+
+## Congress Elections
+file_names <- paste0("/Users/alexander/Documents/boyco-benites/data/processed/congresales-",
+                     years, ".csv")  
+
+dataCongress <- bind_rows(
+  lapply(seq_along(file_names), function(i) {
+    rio::import(file_names[i])
+  })
+)
+
+# Fix UBIGEOs
+allData <- bind_rows(dataPresidential, dataCongress) %>% 
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+```
+
+
+## 1. General Trends
+
+```{r}
+dataTrends <- allData %>% 
+  group_by(TYPE, YEAR) %>%
+  summarise(TOTAL_VOTOS = sum(TOTAL_VOTOS, na.rm = TRUE),
+            ELECTORES_HAB = sum(ELECTORES_HAB, na.rm = TRUE),
+            V_NULOS = sum(V_NULOS, na.rm = TRUE),
+            V_BLANCOS = sum(V_BLANCOS, na.rm = TRUE))
+
+dataTrends$AUSENTISMO = 1 - round(dataTrends$TOTAL_VOTOS / dataTrends$ELECTORES_HAB,2)
+dataTrends$FreqBLANCOS = round(dataTrends$V_BLANCOS / dataTrends$TOTAL_VOTOS,2)
+dataTrends$FreqNULOS = round(dataTrends$V_NULOS / dataTrends$TOTAL_VOTOS, 2)
+dataTrends$FreqINVALIDOS = dataTrends$FreqBLANCOS + dataTrends$FreqNULOS
+```
+
+```{r}
+dataTrends <- dataTrends %>%
+  select(1, 2, 8:9) %>%
+  setNames(c("TYPE", "YEAR", "Votos Blancos", "Votos Nulos")) %>%
+  pivot_longer(cols = c("Votos Blancos", "Votos Nulos"),
+               names_to = "vote_type",
+               values_to = "percentage")
+
+dataTrends <- dataTrends %>%
+  mutate(TYPE = case_when(
+    TYPE == "CONGRESAL" ~ "Elección Congresal",
+    TYPE == "PRESIDENCIAL" ~ "Elección Presidencial",
+    TRUE ~ TYPE  # keep other values as they are
+  ))
+
+dataTrends$YEAR = as.character(dataTrends$YEAR)
+```
+
+```{r fig.show='hold', fig.width=8.5, fig.height=6, dpi=300}
+ggplot(dataTrends, aes(x = YEAR, y = percentage, 
+                      colour = vote_type, 
+                      linetype = TYPE, 
+                      group = interaction(TYPE, vote_type))) +
+  geom_line(size = 1) +
+  geom_point(size = 1) +
+  geom_text(aes(label = percentage),
+            vjust = -0.8, size = 3, show.legend = FALSE) +  
+  labs(title = "Blank and Votes by Election Type",
+       x = " ",
+       y = " ",
+       colour = " ",
+       linetype = " ") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.spacing = unit(0, "lines")
+  ) +
+  guides(
+    colour = guide_legend(order = 1),
+    linetype = guide_legend(order = 2)
+  )
+
+# ggsave("trend.png", dpi = 300, width = 8.5, height = 6, units = "in")
+```
+
