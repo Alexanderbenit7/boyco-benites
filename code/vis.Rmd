@@ -97,3 +97,8 @@ ggplot(dataTrends, aes(x = YEAR, y = percentage,
 # ggsave("trend.png", dpi = 300, width = 8.5, height = 6, units = "in")
 ```
 
+
+## 2. Spatial Patterns
+
+A quick look at the 2021 General Elections.
+
