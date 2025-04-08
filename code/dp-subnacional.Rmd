@@ -4,6 +4,7 @@ library(dplyr)
 library(stringr)
 library(readr)
 library(data.table)
+library(tidyr)
 ```
 
 # 1. ER
@@ -330,3 +331,655 @@ regionales <- rbind(regionales, dataER18)
 regionales <- rbind(regionales, dataER22)
 ```
 
+
+
+# 2. EP
+## 2.1. 2002
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2002-oficina-nacional-de>
+
+Lima province is missing here. Numbers match if included.
+
+```{r}
+EP2002 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2002_Municipal_Provincial.csv")
+```
+
+```{r}
+d <- EP2002 %>% select(1:4,6,11:13) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP02 <- EP2002 %>% select(1,10) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP02 <- merge(dataEP02, d, by = "UBIGEO")
+dataEP02 <- dataEP02[,c(1,3,4,5,6,2,7,8)]
+dataEP02$TOTAL_VOTOS <- dataEP02$VOTOS_OBTENIDOS + dataEP02$VOTOS_BLANCOS + dataEP02$VOTOS_NULOS
+dataEP02 <- dataEP02[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataEP02$AUSENTISMO <- 1 - round(dataEP02$TOTAL_VOTOS / dataEP02$ELECTORES_HABILES, 2)
+dataEP02$FreqBLANCOS <- round(dataEP02$VOTOS_BLANCOS / dataEP02$TOTAL_VOTOS, 2)
+dataEP02$FreqNULOS <- round(dataEP02$VOTOS_NULOS / dataEP02$TOTAL_VOTOS, 2)
+dataEP02$FreqINVALIDOS <- dataEP02$FreqBLANCOS + dataEP02$FreqNULOS
+
+# Last steps
+dataEP02$YEAR = 2002
+dataEP02$TYPE = "PROVINCIALES"
+```
+
+
+## 2.2. 2006
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2006-oficina-nacional-de>
+
+All data is here.
+
+```{r}
+EP2006 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2006_Municipal_Provincial.csv")
+```
+
+```{r}
+d <- EP2006 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP06 <- EP2006 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP06 <- merge(dataEP06, d, by = "UBIGEO")
+dataEP06 <- dataEP06[,c(1,3,4,5,6,2,7,8)]
+dataEP06$TOTAL_VOTOS <- dataEP06$VOTOS_OBTENIDOS + dataEP06$VOTOS_BLANCOS + dataEP06$VOTOS_NULOS
+dataEP06 <- dataEP06[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataEP06$AUSENTISMO <- 1 - round(dataEP06$TOTAL_VOTOS / dataEP06$ELECTORES_HABILES, 2)
+dataEP06$FreqBLANCOS <- round(dataEP06$VOTOS_BLANCOS / dataEP06$TOTAL_VOTOS, 2)
+dataEP06$FreqNULOS <- round(dataEP06$VOTOS_NULOS / dataEP06$TOTAL_VOTOS, 2)
+dataEP06$FreqINVALIDOS <- dataEP06$FreqBLANCOS + dataEP06$FreqNULOS
+
+# Last steps
+dataEP06$YEAR = 2006
+dataEP06$TYPE = "PROVINCIALES"
+```
+
+
+## 2.3. 2010
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2010-oficina-nacional-de-0>
+
+All data is here.
+
+```{r}
+# Step 1: Read the file with proper encoding and delimiter
+df <- read_delim("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2010_Municipal_Provincial.csv", delim = ";", locale = locale(encoding = "LATIN1"))
+
+df <- df %>%
+  mutate(across(everything(), ~ str_replace_all(., 
+           "PARTIDO POPULAR CRISTIANO - PPC", 
+           "PARTIDO POPULAR CRISTIANO - PPC - UNIDAD NACIONAL")))
+
+```
+
+```{r}
+# Detect rows where the first column has the party name
+mask <- grepl("^PARTIDO POPULAR CRISTIANO - PPC - UNIDAD NACIONAL", df[[1]])
+
+# Shift those rows by adding 10 NAs at the beginning and removing the last 10 elements
+df[mask, ] <- t(apply(df[mask, ], 1, function(row) {
+  c(rep(NA, 10), row[1:(length(row) - 10)])
+}))
+```
+
+```{r}
+df <- df %>%
+  mutate(
+    VOTOS_OBTENIDOS = coalesce(VOTOS_OBTENIDOS, lead(VOTOS_OBTENIDOS)),
+    ELECTORES_HABILES = coalesce(ELECTORES_HABILES, lead(ELECTORES_HABILES)),
+    VOTOS_BLANCOS = coalesce(VOTOS_BLANCOS, lead(VOTOS_BLANCOS)),
+    VOTOS_NULOS = coalesce(VOTOS_NULOS, lead(VOTOS_NULOS)),
+    VOTOS_IMPUG = coalesce(VOTOS_IMPUG, lead(VOTOS_IMPUG))
+  )
+
+df <- df %>%
+  filter(!is.na(UBIGEO))
+```
+
+```{r}
+d <- df %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d$ELECTORES_HABILES <- as.numeric(d$ELECTORES_HABILES)
+d$VOTOS_BLANCOS <- as.numeric(d$VOTOS_BLANCOS)
+d$VOTOS_NULOS <- as.numeric(d$VOTOS_NULOS)
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP10 <- df %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+dataEP10$VOTOS_OBTENIDOS <- as.numeric(dataEP10$VOTOS_OBTENIDOS)
+
+dataEP10 <- dataEP10 %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP10 <- merge(dataEP10, d, by = "UBIGEO")
+dataEP10 <- dataEP10[, c(1, 3, 4, 5, 6, 2, 7, 8)]
+dataEP10$TOTAL_VOTOS <- dataEP10$VOTOS_OBTENIDOS + dataEP10$VOTOS_BLANCOS + dataEP10$VOTOS_NULOS
+dataEP10 <- dataEP10[, -c(6)]
+```
+
+```{r}
+# Calculations
+dataEP10$AUSENTISMO <- 1 - round(dataEP10$TOTAL_VOTOS / dataEP10$ELECTORES_HABILES, 2)
+dataEP10$FreqBLANCOS <- round(dataEP10$VOTOS_BLANCOS / dataEP10$TOTAL_VOTOS, 2)
+dataEP10$FreqNULOS <- round(dataEP10$VOTOS_NULOS / dataEP10$TOTAL_VOTOS, 2)
+dataEP10$FreqINVALIDOS <- dataEP10$FreqBLANCOS + dataEP10$FreqNULOS
+
+# Last steps
+dataEP10$YEAR = 2010
+dataEP10$TYPE = "PROVINCIALES"
+```
+
+
+## 2.4. 2014
+
+All data is here.
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2014-oficina-nacional-de>
+
+```{r}
+EP2014 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2014_Municipal_Provincial.csv")
+```
+
+```{r}
+d <- EP2014 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP14 <- EP2014 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP14 <- merge(dataEP14, d, by = "UBIGEO")
+dataEP14 <- dataEP14[,c(1,3,4,5,6,2,7,8)]
+dataEP14$TOTAL_VOTOS <- dataEP14$VOTOS_OBTENIDOS + dataEP14$VOTOS_BLANCOS + dataEP14$VOTOS_NULOS
+dataEP14 <- dataEP14[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataEP14$AUSENTISMO <- 1 - round(dataEP14$TOTAL_VOTOS / dataEP14$ELECTORES_HABILES, 2)
+dataEP14$FreqBLANCOS <- round(dataEP14$VOTOS_BLANCOS / dataEP14$TOTAL_VOTOS, 2)
+dataEP14$FreqNULOS <- round(dataEP14$VOTOS_NULOS / dataEP14$TOTAL_VOTOS, 2)
+dataEP14$FreqINVALIDOS <- dataEP14$FreqBLANCOS + dataEP14$FreqNULOS
+
+# Last steps
+dataEP14$YEAR = 2014
+dataEP14$TYPE = "PROVINCIALES"
+```
+
+
+## 2.5. 2018
+
+All data here
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2018-oficina-nacional-de-1>
+
+```{r}
+EP2018 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2018_Municipal_Provincial_total.csv")
+```
+
+```{r}
+d <- EP2018 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP18 <- EP2018 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP18 <- merge(dataEP18, d, by = "UBIGEO")
+dataEP18 <- dataEP18[,c(1,3,4,5,6,2,7,8)]
+dataEP18$TOTAL_VOTOS <- dataEP18$VOTOS_OBTENIDOS + dataEP18$VOTOS_BLANCOS + dataEP18$VOTOS_NULOS
+dataEP18 <- dataEP18[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataEP18$AUSENTISMO <- 1 - round(dataEP18$TOTAL_VOTOS / dataEP18$ELECTORES_HABILES, 2)
+dataEP18$FreqBLANCOS <- round(dataEP18$VOTOS_BLANCOS / dataEP18$TOTAL_VOTOS, 2)
+dataEP18$FreqNULOS <- round(dataEP18$VOTOS_NULOS / dataEP18$TOTAL_VOTOS, 2)
+dataEP18$FreqINVALIDOS <- dataEP18$FreqBLANCOS + dataEP18$FreqNULOS
+
+# Last steps
+dataEP18$YEAR = 2018
+dataEP18$TYPE = "PROVINCIALES"
+```
+
+
+## 2.6. 2022
+
+Link: <https://datosabiertos.gob.pe/dataset/resultados-por-mesa-de-las-elecciones-municipales-provinciales-2022-oficina-nacional-de>
+
+```{r}
+EP2022 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2022_Municipal_Provincial.csv")
+```
+
+```{r}
+d <- EP2022 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataEP22 <- EP2022 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataEP22 <- merge(dataEP22, d, by = "UBIGEO")
+dataEP22 <- dataEP22[,c(1,3,4,5,6,2,7,8)]
+dataEP22$TOTAL_VOTOS <- dataEP22$VOTOS_OBTENIDOS + dataEP22$VOTOS_BLANCOS + dataEP22$VOTOS_NULOS
+dataEP22 <- dataEP22[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataEP22$AUSENTISMO <- 1 - round(dataEP22$TOTAL_VOTOS / dataEP22$ELECTORES_HABILES, 2)
+dataEP22$FreqBLANCOS <- round(dataEP22$VOTOS_BLANCOS / dataEP22$TOTAL_VOTOS, 2)
+dataEP22$FreqNULOS <- round(dataEP22$VOTOS_NULOS / dataEP22$TOTAL_VOTOS, 2)
+dataEP22$FreqINVALIDOS <- dataEP22$FreqBLANCOS + dataEP22$FreqNULOS
+
+# Last steps
+dataEP22$YEAR = 2022
+dataEP22$TYPE = "PROVINCIALES"
+```
+
+
+Solve 2002 with Lima province missing. We have to add 2002 district elections.
+
+# 3. Districts
+## 3.1. 2002
+
+Lima missing again. Numbers match if included.
+
+```{r}
+ED2002 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2002_Municipal_Distrital.csv")
+```
+
+```{r}
+d <- ED2002 %>% select(1:4,6,11:13) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED02 <- ED2002 %>% select(1,10) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED02 <- merge(dataED02, d, by = "UBIGEO")
+dataED02 <- dataED02[,c(1,3,4,5,6,2,7,8)]
+dataED02$TOTAL_VOTOS <- dataED02$VOTOS_OBTENIDOS + dataED02$VOTOS_BLANCOS + dataED02$VOTOS_NULOS
+dataED02 <- dataED02[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataED02$AUSENTISMO <- 1 - round(dataED02$TOTAL_VOTOS / dataED02$ELECTORES_HABILES, 2)
+dataED02$FreqBLANCOS <- round(dataED02$VOTOS_BLANCOS / dataED02$TOTAL_VOTOS, 2)
+dataED02$FreqNULOS <- round(dataED02$VOTOS_NULOS / dataED02$TOTAL_VOTOS, 2)
+dataED02$FreqINVALIDOS <- dataED02$FreqBLANCOS + dataED02$FreqNULOS
+
+# Last steps
+dataED02$YEAR = 2002
+dataED02$TYPE = "DISTRITALES"
+```
+
+
+## 3.2. 2006
+
+All data here. 
+
+```{r}
+ED2006 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2006_Municipal_Distrital.csv")
+```
+
+```{r}
+d <- ED2006 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED06 <- ED2006 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED06 <- merge(dataED06, d, by = "UBIGEO")
+dataED06 <- dataED06[,c(1,3,4,5,6,2,7,8)]
+dataED06$TOTAL_VOTOS <- dataED06$VOTOS_OBTENIDOS + dataED06$VOTOS_BLANCOS + dataED06$VOTOS_NULOS
+dataED06 <- dataED06[,-c(6)]
+```
+
+```{r}
+# Calculations
+dataED06$AUSENTISMO <- 1 - round(dataED06$TOTAL_VOTOS / dataED06$ELECTORES_HABILES, 2)
+dataED06$FreqBLANCOS <- round(dataED06$VOTOS_BLANCOS / dataED06$TOTAL_VOTOS, 2)
+dataED06$FreqNULOS <- round(dataED06$VOTOS_NULOS / dataED06$TOTAL_VOTOS, 2)
+dataED06$FreqINVALIDOS <- dataED06$FreqBLANCOS + dataED06$FreqNULOS
+
+# Last steps
+dataED06$YEAR = 2006
+dataED06$TYPE = "DISTRITALES"
+```
+
+
+## 3.3. 2010
+
+All data here.
+
+```{r}
+# Step 1: Read the file with proper encoding and delimiter
+df <- read_delim("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2010_Municipal_Distrital.csv", delim = ";", locale = locale(encoding = "LATIN1"))
+
+df <- df %>%
+  mutate(across(everything(), ~ str_replace_all(., 
+           "PARTIDO POPULAR CRISTIANO - PPC", 
+           "PARTIDO POPULAR CRISTIANO - PPC - UNIDAD NACIONAL")))
+
+```
+
+```{r}
+# Detect rows where the first column has the party name
+mask <- grepl("^PARTIDO POPULAR CRISTIANO - PPC - UNIDAD NACIONAL", df[[1]])
+
+# Shift those rows by adding 10 NAs at the beginning and removing the last 10 elements
+df[mask, ] <- t(apply(df[mask, ], 1, function(row) {
+  c(rep(NA, 10), row[1:(length(row) - 10)])
+}))
+```
+
+```{r}
+df <- df %>%
+  mutate(
+    VOTOS_OBTENIDOS = coalesce(VOTOS_OBTENIDOS, lead(VOTOS_OBTENIDOS)),
+    ELECTORES_HABILES = coalesce(ELECTORES_HABILES, lead(ELECTORES_HABILES)),
+    VOTOS_BLANCOS = coalesce(VOTOS_BLANCOS, lead(VOTOS_BLANCOS)),
+    VOTOS_NULOS = coalesce(VOTOS_NULOS, lead(VOTOS_NULOS)),
+    VOTOS_IMPUG = coalesce(VOTOS_IMPUG, lead(VOTOS_IMPUG))
+  )
+
+df <- df %>%
+  filter(!is.na(UBIGEO))
+```
+
+```{r}
+d <- df %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d$ELECTORES_HABILES <- as.numeric(d$ELECTORES_HABILES)
+d$VOTOS_BLANCOS <- as.numeric(d$VOTOS_BLANCOS)
+d$VOTOS_NULOS <- as.numeric(d$VOTOS_NULOS)
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED10 <- df %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+dataED10$VOTOS_OBTENIDOS <- as.numeric(dataED10$VOTOS_OBTENIDOS)
+
+dataED10 <- dataED10 %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED10 <- merge(dataED10, d, by = "UBIGEO")
+dataED10 <- dataED10[, c(1, 3, 4, 5, 6, 2, 7, 8)]
+dataED10$TOTAL_VOTOS <- dataED10$VOTOS_OBTENIDOS + dataED10$VOTOS_BLANCOS + dataED10$VOTOS_NULOS
+dataED10 <- dataED10[, -c(6)]
+```
+
+```{r}
+# Calculations
+dataED10$AUSENTISMO <- 1 - round(dataED10$TOTAL_VOTOS / dataED10$ELECTORES_HABILES, 2)
+dataED10$FreqBLANCOS <- round(dataED10$VOTOS_BLANCOS / dataED10$TOTAL_VOTOS, 2)
+dataED10$FreqNULOS <- round(dataED10$VOTOS_NULOS / dataED10$TOTAL_VOTOS, 2)
+dataED10$FreqINVALIDOS <- dataED10$FreqBLANCOS + dataED10$FreqNULOS
+
+# Last steps
+dataED10$YEAR = 2010
+dataED10$TYPE = "DISTRITALES"
+```
+
+
+## 3.4. 2014
+
+All data here.
+
+```{r}
+ED2014 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2014_Municipal_Distrital.csv")
+```
+
+```{r}
+d <- ED2014 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED14 <- ED2014 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED14 <- merge(dataED14, d, by = "UBIGEO")
+dataED14 <- dataED14[, c(1, 3, 4, 5, 6, 2, 7, 8)]
+dataED14$TOTAL_VOTOS <- dataED14$VOTOS_OBTENIDOS + dataED14$VOTOS_BLANCOS + dataED14$VOTOS_NULOS
+dataED14 <- dataED14[, -c(6)]
+```
+
+```{r}
+# Calculations
+dataED14$AUSENTISMO <- 1 - round(dataED14$TOTAL_VOTOS / dataED14$ELECTORES_HABILES, 2)
+dataED14$FreqBLANCOS <- round(dataED14$VOTOS_BLANCOS / dataED14$TOTAL_VOTOS, 2)
+dataED14$FreqNULOS <- round(dataED14$VOTOS_NULOS / dataED14$TOTAL_VOTOS, 2)
+dataED14$FreqINVALIDOS <- dataED14$FreqBLANCOS + dataED14$FreqNULOS
+
+# Last steps
+dataED14$YEAR = 2014
+dataED14$TYPE = "DISTRITALES"
+```
+
+
+## 3.5. 2018
+
+All here.
+
+```{r}
+ED2018 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2018_Municipal_Distrital_total.csv")
+```
+
+```{r}
+d <- ED2018 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED18 <- ED2018 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED18 <- merge(dataED18, d, by = "UBIGEO")
+dataED18 <- dataED18[, c(1, 3, 4, 5, 6, 2, 7, 8)]
+dataED18$TOTAL_VOTOS <- dataED18$VOTOS_OBTENIDOS + dataED18$VOTOS_BLANCOS + dataED18$VOTOS_NULOS
+dataED18 <- dataED18[, -c(6)]
+```
+
+```{r}
+# Calculations
+dataED18$AUSENTISMO <- 1 - round(dataED18$TOTAL_VOTOS / dataED18$ELECTORES_HABILES, 2)
+dataED18$FreqBLANCOS <- round(dataED18$VOTOS_BLANCOS / dataED18$TOTAL_VOTOS, 2)
+dataED18$FreqNULOS <- round(dataED18$VOTOS_NULOS / dataED18$TOTAL_VOTOS, 2)
+dataED18$FreqINVALIDOS <- dataED18$FreqBLANCOS + dataED18$FreqNULOS
+
+# Last steps
+dataED18$YEAR = 2018
+dataED18$TYPE = "DISTRITALES"
+```
+
+
+## 3.6. 2022
+
+All data here. 
+
+```{r}
+# Rio not working properly.
+ED2022 <- read_delim("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2022_Municipal_Distrital.csv", delim = ";", locale = locale(encoding = "LATIN1"))
+```
+
+```{r}
+d <- ED2022 %>% select(1:4,6,13:15) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  distinct() # Unique cases
+
+d <- d %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+dataED22 <- ED2022 %>% select(1,12) %>% # Adding zeros:
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO)) %>%
+  group_by(UBIGEO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop")
+```
+
+```{r}
+# Calculating total votes per district
+dataED22 <- merge(dataED22, d, by = "UBIGEO")
+dataED22 <- dataED22[, c(1, 3, 4, 5, 6, 2, 7, 8)]
+dataED22$TOTAL_VOTOS <- dataED22$VOTOS_OBTENIDOS + dataED22$VOTOS_BLANCOS + dataED22$VOTOS_NULOS
+dataED22 <- dataED22[, -c(6)]
+```
+
+```{r}
+# Calculations
+dataED22$AUSENTISMO <- 1 - round(dataED22$TOTAL_VOTOS / dataED22$ELECTORES_HABILES, 2)
+dataED22$FreqBLANCOS <- round(dataED22$VOTOS_BLANCOS / dataED22$TOTAL_VOTOS, 2)
+dataED22$FreqNULOS <- round(dataED22$VOTOS_NULOS / dataED22$TOTAL_VOTOS, 2)
+dataED22$FreqINVALIDOS <- dataED22$FreqBLANCOS + dataED22$FreqNULOS
+
+# Last steps
+dataED22$YEAR = 2022
+dataED22$TYPE = "DISTRITALES"
+```
+
+
+## Handling inconsistencies
+
+To be solved: we have to include results for Lima Province Municipality in 2002, and District Municipality elections in 2002. Missing in original data.
+
+We start with district elections from 2002. From Infogob:
