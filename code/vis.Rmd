@@ -4,6 +4,11 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 library(ggplot2)
+library(GGally)
+library(ggcorrplot)
+library(corrplot)
+library(patchwork)
+library(cowplot)
 ```
 
 ```{r}
@@ -32,6 +37,15 @@ dataCongress <- bind_rows(
 # Fix UBIGEOs
 allData <- bind_rows(dataPresidential, dataCongress) %>% 
   mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+regionales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/regionalesALL.csv")
+provinciales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/provincialesALL.csv")
+distritales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/distritalesALL.csv")
+```
+
+```{r}
+subData <- rbind(distritales, provinciales)
+subData <- rbind(subData, regionales)
 ```
 
 
@@ -97,8 +111,270 @@ ggplot(dataTrends, aes(x = YEAR, y = percentage,
 # ggsave("trend.png", dpi = 300, width = 8.5, height = 6, units = "in")
 ```
 
+```{r}
+subDataTrends <- subData %>% 
+  group_by(TYPE, YEAR) %>%
+  summarise(TOTAL_VOTOS = sum(TOTAL_VOTOS, na.rm = TRUE),
+            ELECTORES_HAB = sum(ELECTORES_HABILES, na.rm = TRUE),
+            V_NULOS = sum(VOTOS_NULOS, na.rm = TRUE),
+            V_BLANCOS = sum(VOTOS_BLANCOS, na.rm = TRUE))
+
+subDataTrends$AUSENTISMO = 1 - round(subDataTrends$TOTAL_VOTOS / subDataTrends$ELECTORES_HAB,2)
+subDataTrends$FreqBLANCOS = round(subDataTrends$V_BLANCOS / subDataTrends$TOTAL_VOTOS,2)
+subDataTrends$FreqNULOS = round(subDataTrends$V_NULOS / subDataTrends$TOTAL_VOTOS, 2)
+subDataTrends$FreqINVALIDOS = subDataTrends$FreqBLANCOS + subDataTrends$FreqNULOS
+```
+
+```{r}
+subDataTrends <- subDataTrends %>%
+  select(1, 2, 8:9) %>%
+  setNames(c("TYPE", "YEAR", "Votos Blancos", "Votos Nulos")) %>%
+  pivot_longer(cols = c("Votos Blancos", "Votos Nulos"),
+               names_to = "vote_type",
+               values_to = "percentage")
+
+subDataTrends <- subDataTrends %>%
+  mutate(TYPE = case_when(
+    TYPE == "REGIONALES" ~ "Gobierno Regional",
+    TYPE == "PROVINCIALES" ~ "Alcaldía Provincial",
+    TYPE == "DISTRITALES" ~ "Alcaldía Distrital",
+    TRUE ~ TYPE  # keep other values as they are
+  ))
+
+subDataTrends$YEAR = as.character(subDataTrends$YEAR)
+```
+
+```{r}
+subDataTrends1 <- subDataTrends[subDataTrends$TYPE == "Gobierno Regional",]
+```
+
+```{r fig.show='hold', fig.width=8.5, fig.height=6, dpi=300}
+ggplot(subDataTrends1, aes(x = YEAR, y = percentage, 
+                      colour = vote_type, 
+                      linetype = TYPE, 
+                      group = interaction(TYPE, vote_type))) +
+  geom_line(size = 1) +
+  geom_point(size = 1) +
+  geom_text(aes(label = percentage),
+            vjust = -0.8, size = 3, show.legend = FALSE) +  
+  labs(title = "Blank and Votes by Election Type",
+       x = " ",
+       y = " ",
+       colour = " ",
+       linetype = " ") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.spacing = unit(0, "lines")
+  ) +
+  guides(
+    colour = guide_legend(order = 1),
+    linetype = guide_legend(order = 2)
+  )
+
+ggsave("trendGR.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
+```
+
+```{r}
+subDataTrends <- subDataTrends[!subDataTrends$TYPE == "Gobierno Regional",]
+```
+
+```{r fig.show='hold', fig.width=8.5, fig.height=6, dpi=300}
+ggplot(subDataTrends, aes(x = YEAR, y = percentage, 
+                      colour = vote_type, 
+                      linetype = TYPE, 
+                      group = interaction(TYPE, vote_type))) +
+  geom_line(size = 1) +
+  geom_point(size = 1) +
+  geom_text(aes(label = percentage),
+            vjust = -0.8, size = 3, show.legend = FALSE) +  
+  labs(title = "Blank and Votes by Election Type",
+       x = " ",
+       y = " ",
+       colour = " ",
+       linetype = " ") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.spacing = unit(0, "lines")
+  ) +
+  guides(
+    colour = guide_legend(order = 1),
+    linetype = guide_legend(order = 2)
+  )
+
+ggsave("trendAL.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
+```
 
 ## 2. Spatial Patterns
 
-A quick look at the 2021 General Elections.
+### 2.1. Congress Elections Spatial Patterns
+
+```{r}
+g1cb <- dataCongress %>% select(1,10,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqBLANCOS,
+    names_prefix = "blank_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1cb_plot <- g1cb %>% select(-UBIGEO) %>% slice(1:1874) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1cb_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("congress_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+g1cn <- dataCongress %>% select(1,11,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqNULOS,
+    names_prefix = "null_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1cn_plot <- g1cn %>% select(-UBIGEO) %>% slice(1:1874) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1cn_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("congress_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+
+### 2.1. Presidential Elections Spatial Patterns
+
+```{r}
+g1pb <- dataPresidential %>% select(1,10,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqBLANCOS,
+    names_prefix = "blank_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1pb_plot <- g1pb %>% select(-UBIGEO) %>% slice(1:1874) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1pb_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("presidential_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+g1pn <- dataPresidential %>% select(1,11,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqNULOS,
+    names_prefix = "null_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1pn_plot <- g1pn %>% select(-UBIGEO) %>% slice(1:1874) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1pn_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("presidential_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+
+
+
+
+
+
 

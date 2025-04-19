@@ -983,3 +983,73 @@ dataED22$TYPE = "DISTRITALES"
 To be solved: we have to include results for Lima Province Municipality in 2002, and District Municipality elections in 2002. Missing in original data.
 
 We start with district elections from 2002. From Infogob:
+
+```{r}
+## Add Lima
+ubi2002 <- import("/Users/alexander/Documents/boyco-benites/data/raw/prob/ubi2002.xlsx")
+e2002 <- import("/Users/alexander/Documents/boyco-benites/data/raw/prob/munidis2002.xlsx")
+
+e2002 <- e2002[e2002$Provincia == "LIMA",]
+ubi2002 <- ubi2002[ubi2002$PROVINCIA == "LIMA",]
+
+d <- e2002 %>% select(1,2,3,8,10)
+e2002 <- e2002 %>% select(1,2,3,4,6) %>% distinct()
+ubi2002 <- ubi2002 %>% select(1,4)
+
+names(e2002) <- c("DEPARTAMENTO","PROVINCIA","DISTRITO","ELECTORES_HABILES","TOTAL_VOTOS")
+e2002 <- merge(e2002, ubi2002, by = "DISTRITO")
+
+d <- d %>%
+  filter(`Organización Política` %in% c("VOTOS EN BLANCO", "VOTOS NULOS")) %>%
+  pivot_wider(
+    names_from = `Organización Política`,
+    values_from = Votos
+  ) %>% select(3:5)
+
+names(d) <- c("DISTRITO","VOTOS_BLANCOS","VOTOS_NULOS")
+
+e2002 <- merge(e2002, d, by = "DISTRITO")
+e2002 <- e2002[,c(6,2,3,1,4,7,8,5)]
+```
+
+```{r}
+# Calculations
+e2002$AUSENTISMO <- 1 - round(e2002$TOTAL_VOTOS / e2002$ELECTORES_HABILES, 2)
+e2002$FreqBLANCOS <- round(e2002$VOTOS_BLANCOS / e2002$TOTAL_VOTOS, 2)
+e2002$FreqNULOS <- round(e2002$VOTOS_NULOS / e2002$TOTAL_VOTOS, 2)
+e2002$FreqINVALIDOS <- e2002$FreqBLANCOS + e2002$FreqNULOS
+
+# Last steps
+e2002$YEAR = 2002
+e2002$TYPE = "DISTRITALES"
+
+# Stack
+dataED02 <- rbind(dataED02, e2002)
+```
+
+Now Province:
+
+15,298,237 for the election
+
+```{r}
+sum(dataEP02$ELECTORES_HABILES)
+```
+
+## Stack
+
+```{r}
+provinciales <- rbind(dataEP02, dataEP06)
+provinciales <- rbind(provinciales, dataEP10)
+provinciales <- rbind(provinciales, dataEP14)
+provinciales <- rbind(provinciales, dataEP18)
+provinciales <- rbind(provinciales, dataEP22)
+```
+
+```{r}
+distritales <- rbind(dataED02, dataED06)
+distritales <- rbind(distritales, dataED10)
+distritales <- rbind(distritales, dataED14)
+distritales <- rbind(distritales, dataED18)
+distritales <- rbind(distritales, dataED22)
+```
+
