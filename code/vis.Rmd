@@ -9,6 +9,9 @@ library(ggcorrplot)
 library(corrplot)
 library(patchwork)
 library(cowplot)
+library(factoextra) 
+library(cluster)
+library(Rtsne)
 ```
 
 ```{r}
@@ -173,7 +176,7 @@ ggplot(subDataTrends1, aes(x = YEAR, y = percentage,
     linetype = guide_legend(order = 2)
   )
 
-ggsave("trendGR.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
+# ggsave("trendGR.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
 ```
 
 ```{r}
@@ -205,12 +208,15 @@ ggplot(subDataTrends, aes(x = YEAR, y = percentage,
     linetype = guide_legend(order = 2)
   )
 
-ggsave("trendAL.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
+# ggsave("trendAL.jpeg", dpi = 300, width = 8.5, height = 6, units = "in")
 ```
 
 ## 2. Spatial Patterns
 
-### 2.1. Congress Elections Spatial Patterns
+
+### 2.1. Congress Elections
+
+#### 2.1.1. Blank votes
 
 ```{r}
 g1cb <- dataCongress %>% select(1,10,13) %>%
@@ -248,8 +254,38 @@ ggpairs(
   upper = list(continuous = wrap(my_cor, method = "pearson"))
 )
 
-ggsave("congress_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+# ggsave("congress_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
 ```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1cb_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1cb_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1cb_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1cb_plot,
+             main = "K-means Clustering of Districts")
+```
+
+#### 2.1.2. Null Votes
 
 ```{r}
 g1cn <- dataCongress %>% select(1,11,13) %>%
@@ -287,11 +323,42 @@ ggpairs(
   upper = list(continuous = wrap(my_cor, method = "pearson"))
 )
 
-ggsave("congress_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+# ggsave("congress_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1cn_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1cn_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Null Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1cn_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1cn_plot,
+             main = "K-means Clustering of Districts")
 ```
 
 
-### 2.1. Presidential Elections Spatial Patterns
+
+### 2.2. Presidential Elections
+
+#### 2.2.1. Blank Votes
 
 ```{r}
 g1pb <- dataPresidential %>% select(1,10,13) %>%
@@ -329,8 +396,38 @@ ggpairs(
   upper = list(continuous = wrap(my_cor, method = "pearson"))
 )
 
-ggsave("presidential_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+# ggsave("presidential_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
 ```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1pb_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1pb_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1pb_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1pb_plot,
+             main = "K-means Clustering of Districts")
+```
+
+#### 2.2.2. Null Votes
 
 ```{r}
 g1pn <- dataPresidential %>% select(1,11,13) %>%
@@ -368,12 +465,459 @@ ggpairs(
   upper = list(continuous = wrap(my_cor, method = "pearson"))
 )
 
-ggsave("presidential_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+# ggsave("presidential_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1pn_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1pn_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Null Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1pn_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1pn_plot,
+             main = "K-means Clustering of Districts")
+```
+
+### 2.3. Regional Governors
+
+#### 2.3.1. Blank Votes
+
+```{r}
+g1rb <- regionales %>% select(1,10,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqBLANCOS,
+    names_prefix = "blank_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1rb_plot <- g1rb %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1rb_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("reg_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1rb_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1rb_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1rb_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1rb_plot,
+             main = "K-means Clustering of Districts")
+```
+
+#### 2.3.2. Blank Votes
+
+```{r}
+g1rn <- regionales %>% select(1,11,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqNULOS,
+    names_prefix = "null_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1rn_plot <- g1rn %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1rn_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("reg_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1rn_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1rn_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Null Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1rn_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1rn_plot,
+             main = "K-means Clustering of Districts")
 ```
 
 
+### 2.4. Province Mayors
+
+#### 2.4.1. Blank Votes
+
+```{r}
+g1pb <- provinciales %>% select(1,10,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqBLANCOS,
+    names_prefix = "blank_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1pb_plot <- g1rb %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1pb_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("prov_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1pb_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1pb_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1pb_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1pb_plot,
+             main = "K-means Clustering of Districts")
+```
+
+#### 2.4.2. Null Votes
+
+```{r}
+g1pn <- provinciales %>% select(1,11,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqNULOS,
+    names_prefix = "null_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1pn_plot <- g1pn %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1pn_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("prov_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1pn_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1pn_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Null Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1pn_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1pn_plot,
+             main = "K-means Clustering of Districts")
+```
 
 
+### 2.5. District Mayors
+
+#### 2.5.1. Blank Votes
+
+```{r}
+g1db <- distritales %>% select(1,10,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqBLANCOS,
+    names_prefix = "blank_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1db_plot <- g1db %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1db_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("dist_blank.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1db_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1db_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1db_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1db_plot,
+             main = "K-means Clustering of Districts")
+```
+
+
+#### 2.5.2. Null Votes
+
+```{r}
+g1dn <- distritales %>% select(1,11,13) %>%
+  mutate(YEAR = as.character(YEAR)) %>% 
+  pivot_wider(
+    names_from = YEAR,
+    values_from = FreqNULOS,
+    names_prefix = "null_"
+  ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Optionally remove UBIGEO for plotting
+g1dn_plot <- g1dn %>% select(-UBIGEO) %>%
+  filter(if_all(everything(), ~ is.finite(.))) %>% select(6,5,4,3,2,1)
+```
+
+```{r message=FALSE, warning=FALSE, results='hide'}
+# Custom function to show correlation coefficients
+my_cor <- function(data, mapping, method = "pearson", digits = 2, ...) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = "complete.obs")
+  ggally_text(
+    label = format(corr, digits = digits),
+    mapping = aes(),
+    ...
+  ) +
+    theme_void()
+}
+
+# Create the plot
+ggpairs(
+  data = g1dn_plot,
+  lower = list(continuous = wrap("points", alpha = 0.5, size = 1)),
+  diag = list(continuous = wrap("barDiag", bins = 20)),
+  upper = list(continuous = wrap(my_cor, method = "pearson"))
+)
+
+ggsave("dist_null.jpeg", dpi = 300, width = 8.5, height = 7, units = "in")
+```
+
+```{r}
+# Step 2: Compute distance matrix (Euclidean by default)
+dist_matrix <- dist(g1dn_plot, method = "euclidean")
+
+# Step 3: Hierarchical clustering (Ward's method = minimizes within-cluster variance)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# PCA on the scaled data
+pca_result <- prcomp(g1dn_plot)
+
+# Visualise with PCA and colour by hierarchical cluster
+fviz_pca_ind(pca_result,
+             geom.ind = "point",
+             col.ind = as.factor(cutree(hc, k = 3)),  # Cluster membership
+             palette = "jco",
+             addEllipses = TRUE,
+             legend.title = "Cluster",
+             title = "District Clusters Based on Null Votes (PCA)")
+```
+
+```{r}
+set.seed(123)
+kmeans_result <- kmeans(g1dn_plot, centers = 3, nstart = 25)
+
+fviz_cluster(kmeans_result, data = g1dn_plot,
+             main = "K-means Clustering of Districts")
+```
 
 
 
