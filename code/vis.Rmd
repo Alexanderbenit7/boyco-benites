@@ -12,6 +12,7 @@ library(cowplot)
 library(factoextra) 
 library(cluster)
 library(Rtsne)
+library(sf)
 ```
 
 ```{r}
@@ -44,6 +45,11 @@ allData <- bind_rows(dataPresidential, dataCongress) %>%
 regionales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/regionalesALL.csv")
 provinciales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/provincialesALL.csv")
 distritales <- import("/Users/alexander/Documents/boyco-benites/data/processed/sub/distritalesALL.csv")
+```
+
+```{r}
+ubi <- import("/Users/alexander/Documents/boyco-benites/TB_UBIGEOS.csv")
+dist21 <- st_read("/Users/alexander/Documents/boyco-benites/shp/2021/DISTRITOS_inei_geogpsperu_suyopomalia.shp") # Open 2021 shp
 ```
 
 ```{r}
@@ -212,10 +218,7 @@ ggplot(subDataTrends, aes(x = YEAR, y = percentage,
 ```
 
 ## 2. Spatial Patterns
-
-
 ### 2.1. Congress Elections
-
 #### 2.1.1. Blank votes
 
 ```{r}
@@ -228,8 +231,11 @@ g1cb <- dataCongress %>% select(1,10,13) %>%
   ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
 
 # Optionally remove UBIGEO for plotting
-g1cb_plot <- g1cb %>% select(-UBIGEO) %>% slice(1:1874) %>%
-  filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
+g1cb_plot <- g1cb %>%
+  slice(1:1874) %>%
+  tibble::column_to_rownames("UBIGEO") %>%  # Set UBIGEO as row names
+  filter(if_all(everything(), ~ is.finite(.))) %>%
+  select(5, 4, 3, 2, 1)
 ```
 
 ```{r message=FALSE, warning=FALSE, results='hide'}
@@ -275,6 +281,18 @@ fviz_pca_ind(pca_result,
              addEllipses = TRUE,
              legend.title = "Cluster",
              title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+# Step 1: Cut the dendrogram to get cluster membership (3 clusters in this example)
+cluster_membership <- cutree(hc, k = 3)
+
+# Step 2: Add cluster assignment as a new column in the original dataset
+clust_blank_congress <- g1cb_plot
+clust_blank_congress $cluster <- factor(cluster_membership)
+
+# Ubi
+clust_blank_congress$UBIGEO <- row.names(clust_blank_congress)
 ```
 
 ```{r}
@@ -354,6 +372,102 @@ fviz_cluster(kmeans_result, data = g1cn_plot,
              main = "K-means Clustering of Districts")
 ```
 
+```{r}
+# Filtering data
+c2021 <- dataCongress[dataCongress$YEAR == "2021",]
+c2021 <-  c2021 %>%
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+
+# Ubigeo
+ubi <- ubi[,c(2,3)]
+ubi <- ubi %>%
+  mutate(ubigeo_reniec = ifelse(nchar(ubigeo_reniec) == 5, str_pad(ubigeo_reniec, 6, pad = "0"), ubigeo_reniec)) %>% 
+  mutate(ubigeo_inei = ifelse(nchar(ubigeo_inei) == 5, str_pad(ubigeo_inei, 6, pad = "0"), ubigeo_inei))
+  
+#Merge
+c2021 = merge(c2021, ubi, by.x = "UBIGEO", by.y = "ubigeo_reniec", all.x = TRUE)
+c2021 = merge(c2021, clust_blank_congress, by = "UBIGEO", all.x = TRUE)
+
+c2021 %>%
+  group_by(cluster) %>%
+  summarise(avg_blancos = mean(FreqBLANCOS, na.rm = TRUE))
+```
+
+```{r}
+map <- dist21 %>% # Merge with shapefile
+  left_join(c2021, by = c("UBIGEO" = "ubigeo_inei")) 
+```
+
+```{r}
+## Spatial Patterns of Blank Votes
+blank_congress_map21 <- ggplot(map) +
+  geom_sf(aes(fill = FreqBLANCOS), colour = NA) +  # no lines between polygons
+  scale_fill_viridis_c(
+    option = "A",  # high-contrast palette
+    name = "Blank Votes (0-1)"
+  ) +
+  labs(
+    title = "2021 Peruvian National Elections (Congress)",
+    subtitle = "Blank Votes (%)",
+    caption = "Source: ONPE"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank(),   # remove grid
+    axis.text = element_blank(),    # remove axis labels
+    axis.title = element_blank()    # remove axis titles
+  )
+
+# Save it
+ggsave(
+  filename = "blank_congress_map21.jpeg",
+  plot = blank_congress_map21,
+  path = "/Users/alexander/Documents/boyco-benites/figs/national",
+  width = 10,
+  height = 12,
+  dpi = 300
+)
+```
+
+```{r}
+party_colours <- c(
+  "1" = "#0087DC",  
+  "2" = "#E4003B",      
+  "3"  = "#FAA61A"   
+)
+```
+
+```{r}
+party_map <- ggplot(map) +
+  geom_sf(aes(fill = cluster), colour = "gray", size = 0.05) +
+  scale_fill_manual(
+    values = party_colours,
+    name = "Cluster"
+  ) +
+  labs(
+    title = "Clusters of Blank Votes (Congress)",
+    caption = "Source: ONPE"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank()
+  )
+
+# Save it
+ggsave(
+  filename = "cluster_map_congress.jpeg",
+  plot = party_map,
+  path = "/Users/alexander/Documents/boyco-benites/figs/national",
+  width = 10,
+  height = 12,
+  dpi = 300
+)
+```
+
 
 
 ### 2.2. Presidential Elections
@@ -370,7 +484,8 @@ g1pb <- dataPresidential %>% select(1,10,13) %>%
   ) %>% mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
 
 # Optionally remove UBIGEO for plotting
-g1pb_plot <- g1pb %>% select(-UBIGEO) %>% slice(1:1874) %>%
+g1pb_plot <- g1pb %>% slice(1:1874) %>%
+  tibble::column_to_rownames("UBIGEO") %>%
   filter(if_all(everything(), ~ is.finite(.))) %>% select(5,4,3,2,1)
 ```
 
@@ -417,6 +532,18 @@ fviz_pca_ind(pca_result,
              addEllipses = TRUE,
              legend.title = "Cluster",
              title = "District Clusters Based on Blank Votes (PCA)")
+```
+
+```{r}
+# Step 1: Cut the dendrogram to get cluster membership (3 clusters in this example)
+cluster_membership <- cutree(hc, k = 3)
+
+# Step 2: Add cluster assignment as a new column in the original dataset
+clust_blank_presidential<- g1pb_plot
+clust_blank_presidential$cluster <- factor(cluster_membership)
+
+# Ubi
+clust_blank_presidential$UBIGEO <- row.names(clust_blank_presidential)
 ```
 
 ```{r}
@@ -495,6 +622,103 @@ kmeans_result <- kmeans(g1pn_plot, centers = 3, nstart = 25)
 fviz_cluster(kmeans_result, data = g1pn_plot,
              main = "K-means Clustering of Districts")
 ```
+
+```{r}
+p2021 <- dataPresidential %>% select(1,10,13) %>%
+  mutate(UBIGEO = ifelse(nchar(UBIGEO) == 5, str_pad(UBIGEO, 6, pad = "0"), UBIGEO))
+p2021 <- p2021[p2021$YEAR == "2021",]
+
+#Merge
+p2021 <- merge(p2021, ubi, by.x = "UBIGEO", by.y = "ubigeo_reniec", all.x = TRUE)
+p2021 <- merge(p2021, clust_blank_presidential, by = "UBIGEO", all.x = TRUE)
+
+p2021 <- p2021[,c(2,4,10)]
+
+p2021 %>%
+  group_by(cluster) %>%
+  summarise(avg_blancos = mean(FreqBLANCOS, na.rm = TRUE))
+```
+
+```{r}
+map <- dist21 %>% # Merge with shapefile
+  left_join(p2021, by = c("UBIGEO" = "ubigeo_inei")) 
+```
+
+```{r}
+## Spatial Patterns of Blank Votes
+blank_presidential_map21 <- ggplot(map) +
+  geom_sf(aes(fill = FreqBLANCOS), colour = NA) +  # no lines between polygons
+  scale_fill_viridis_c(
+    option = "A",  # high-contrast palette
+    name = "Blank Votes (0-1)"
+  ) +
+  labs(
+    title = "2021 Peruvian National Elections (Presidential)",
+    subtitle = "Blank Votes (%)",
+    caption = "Source: ONPE"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank(),   # remove grid
+    axis.text = element_blank(),    # remove axis labels
+    axis.title = element_blank()    # remove axis titles
+  )
+
+# Save it
+ggsave(
+  filename = "blank_presidential_map21.jpeg",
+  plot = blank_presidential_map21,
+  path = "/Users/alexander/Documents/boyco-benites/figs/national",
+  width = 10,
+  height = 12,
+  dpi = 300
+)
+```
+
+Last map before going to bed:
+
+```{r}
+party_colours <- c(
+  "1" = "#0087DC",  
+  "2" = "#FAA61A", 
+  "3"  = "#E4003B"   
+)
+```
+
+```{r}
+party_map <- ggplot(map) +
+  geom_sf(aes(fill = cluster), colour = "gray", size = 0.05) +
+  scale_fill_manual(
+    values = party_colours,
+    name = "Cluster"
+  ) +
+  labs(
+    title = "Clusters of Blank Votes (Presidential)",
+    caption = "Source: ONPE"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    panel.grid = element_blank(),
+    axis.text = element_blank(),
+    axis.title = element_blank()
+  )
+
+# Save it
+ggsave(
+  filename = "cluster_map_presidential.jpeg",
+  plot = party_map,
+  path = "/Users/alexander/Documents/boyco-benites/figs/national",
+  width = 10,
+  height = 12,
+  dpi = 300
+)
+```
+
+
+
+ 
 
 ### 2.3. Regional Governors
 
