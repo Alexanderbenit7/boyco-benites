@@ -980,8 +980,6 @@ dataED22$TYPE = "DISTRITALES"
 
 ## Handling inconsistencies
 
-To be solved: we have to include results for Lima Province Municipality in 2002, and District Municipality elections in 2002. Missing in original data.
-
 We start with district elections from 2002. From Infogob:
 
 ```{r}
@@ -1027,23 +1025,7 @@ e2002$TYPE = "DISTRITALES"
 dataED02 <- rbind(dataED02, e2002)
 ```
 
-Now Province:
-
-15,298,237 for the election
-
-```{r}
-sum(dataEP02$ELECTORES_HABILES)
-```
-
-## Stack
-
-```{r}
-provinciales <- rbind(dataEP02, dataEP06)
-provinciales <- rbind(provinciales, dataEP10)
-provinciales <- rbind(provinciales, dataEP14)
-provinciales <- rbind(provinciales, dataEP18)
-provinciales <- rbind(provinciales, dataEP22)
-```
+All good with District Elections from 2002. Proceed with stack:
 
 ```{r}
 distritales <- rbind(dataED02, dataED06)
@@ -1051,5 +1033,45 @@ distritales <- rbind(distritales, dataED10)
 distritales <- rbind(distritales, dataED14)
 distritales <- rbind(distritales, dataED18)
 distritales <- rbind(distritales, dataED22)
+```
+
+
+To be solved: we have to include results for Lima Province Municipality in 2002, and District Municipality elections in 2002. Missing in original data.
+
+```{r}
+EP_LIM_2002 <- import("/Users/alexander/Documents/boyco-benites/data/raw/subnacional/ERM2002 Resultado Muni Provincial.xlsx")
+```
+
+```{r}
+dataLIM_EP02 <- EP_LIM_2002 %>% select(2:6,10:14) %>% distinct() %>% select(-MESA) %>% 
+  group_by(UBIGEO,DEPARTAMENTO, PROVINCIA, DISTRITO) %>%  # Group and sum by district
+  summarise(across(where(is.numeric), \(x) sum(x, na.rm = TRUE)), .groups = "drop") %>% select(-`VOTOS VÁLIDOS`)
+
+colnames(dataLIM_EP02) <- c("UBIGEO","DEPARTAMENTO","PROVINCIA","DISTRITO","VOTOS_BLANCOS",
+                            "VOTOS_NULOS","TOTAL_VOTOS","ELECTORES_HABILES")
+```
+
+```{r}
+# Calculations
+dataLIM_EP02$AUSENTISMO <- 1 - round(dataLIM_EP02$TOTAL_VOTOS / dataLIM_EP02$ELECTORES_HABILES, 2)
+dataLIM_EP02$FreqBLANCOS <- round(dataLIM_EP02$VOTOS_BLANCOS / dataLIM_EP02$TOTAL_VOTOS, 2)
+dataLIM_EP02$FreqNULOS <- round(dataLIM_EP02$VOTOS_NULOS / dataLIM_EP02$TOTAL_VOTOS, 2)
+dataLIM_EP02$FreqINVALIDOS <- dataLIM_EP02$FreqBLANCOS + dataLIM_EP02$FreqNULOS
+
+dataLIM_EP02$YEAR = 2002
+dataLIM_EP02$TYPE = "PROVINCIALES"
+
+# Stack
+dataEP02 <- rbind(dataEP02, dataLIM_EP02)
+```
+
+Solved. Proceed with stack.
+
+```{r}
+provinciales <- rbind(dataEP02, dataEP06)
+provinciales <- rbind(provinciales, dataEP10)
+provinciales <- rbind(provinciales, dataEP14)
+provinciales <- rbind(provinciales, dataEP18)
+provinciales <- rbind(provinciales, dataEP22)
 ```
 

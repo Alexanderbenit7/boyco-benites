@@ -431,6 +431,17 @@ names(dataEG01) <- c("UBIGEO","DEPARTAMENTO","PROVINCIA","DISTRITO","V_BLANCOS",
 ```
 
 ```{r}
+dataEG01 <- dataEG01 %>%
+  group_by(UBIGEO) %>%
+  mutate(ELECTORES_HAB = ifelse(is.na(ELECTORES_HAB),
+                                max(ELECTORES_HAB, na.rm = TRUE),
+                                ELECTORES_HAB)) %>%
+  ungroup()
+
+dataEG01 <- dataEG01[complete.cases(dataEG01$V_BLANCOS),]
+```
+
+```{r}
 # Calculating frequencies based on total registered votes
 dataEG01$AUSENTISMO <- 1-round(dataEG01$TOTAL_VOTOS / dataEG01$ELECTORES_HAB,2) # Turnout
 dataEG01$FreqBLANCOS <- round(dataEG01$V_BLANCOS/dataEG01$TOTAL_VOTOS,2) # Blank votes
